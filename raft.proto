@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+service Node {
+    rpc Suspend(SuspendRequest) returns (SuspendResponse);
+    rpc RequestVote(VoteRequest) returns (VoteResponse);
+    rpc AppendEntries(AppendRequest) returns (AppendResponse);
+    rpc GetLeader(GetLeaderRequest) returns (GetLeaderResponse);
+}
+
+message VoteRequest {
+    int64 term = 1;
+    string candidateId = 2;
+}
+
+message VoteResponse {
+    int64 term = 1;
+    bool vote = 2;
+}
+
+message SuspendResponse {
+
+}
+
+message SuspendRequest {
+    int32 period = 1;
+}
+
+message AppendRequest {
+    int64 term = 1;
+    string leaderId = 2;
+}
+
+message AppendResponse {
+    int64 term = 1;
+    bool success = 2;
+}
+
+message GetLeaderRequest {
+
+}
+
+message GetLeaderResponse {
+    int32 nothing_id_vote = 1;
+    oneof GetResponse {
+        GetNothing info_0 = 2;
+        GetID info_1 = 3;
+        GetVoted info_2 = 4;
+    }
+}
+
+message GetNothing {
+
+}
+
+message GetID {
+    string leaderId = 1;
+    string ip_address = 2;
+}
+
+message GetVoted {
+    string votedId = 1;
+}
