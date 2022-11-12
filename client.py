@@ -1,4 +1,3 @@
-
 import grpc
 import raft_pb2 as pb2
 import raft_pb2_grpc as pb2_grpc
@@ -7,6 +6,7 @@ import re
 reg_suspend = r"suspend \d+"
 reg_connect = r"connect \d+.\d+.\d+.\d+:\d+"
 reg_leader = r"getleader"
+
 
 def parse_string(stub: pb2_grpc.NodeStub, message: str):
     try:
@@ -27,11 +27,12 @@ def parse_string(stub: pb2_grpc.NodeStub, message: str):
     except grpc._channel._InactiveRpcError:
         return -1
 
+
 class Client:
     def __init__(self):
         self.stub_ = None
         self.channel_ = None
-    
+
     def start(self):
         while True:
             line = input("> ")
