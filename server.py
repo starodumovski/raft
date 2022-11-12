@@ -281,7 +281,7 @@ class Node(pb2_grpc.NodeServicer):
                             self.scheduler_lock()
                             # return
                     except grpc._channel._InactiveRpcError as ex:
-                        print(key, ex)
+                        # print(key, ex)
                         channel = grpc.insecure_channel(SERVER_ADDRESS[key])
                         stub = pb2_grpc.NodeStub(channel)
                         self.list_of_stubs[key] = (stub, channel, SERVER_ADDRESS[key],)
@@ -386,7 +386,7 @@ import tqdm
 
 
 def retry_wait(stop_event, timeout, max_retries=10):
-    for _ in tqdm.trange(max_retries, desc="Waiting for the server to start", disable=False):
+    for _ in tqdm.trange(max_retries, desc="Waiting for the server to start", disable=max_retries == 1):
         if stop_event.wait(timeout):
             return True
         time.sleep(randint(25, 75) / 1000)
