@@ -327,7 +327,6 @@ def retry_wait(stop_event, timeout, max_retries=10):
 def server_launch(stop_event: threading.Event, node: Node):
     print(f"I am a {node.state.name.lower()}. Term: {node.term}")
 
-    print("Trying to find the current LEADER")
     retry_wait(stop_event, random.randint(100, 200) / 1000, max_retries=20)
 
     while True:
