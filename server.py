@@ -24,7 +24,6 @@ SERVER_ID = None
 SERVER_ADDRESS = {}
 SERVICE_AMOUNT = 0
 
-
 @unique
 class State(IntEnum):
     FOLLOWER = -1,
@@ -72,6 +71,17 @@ def initialize_parameters() -> bool:
 def initialize_timeout():
     return randint(150, 300) / 1000
 
+class MyThread(threading.Thread):
+    def __init__(self, event, node):
+        threading.Thread.__init__(self)
+        self.stopped = event
+        self.node = node
+    def run(self):
+        while True:
+            while not self.stopped.wait(0.05):
+                self.node.leader_state()
+                # call a function
+
 
 class Node(pb2_grpc.NodeServicer):
     def __init__(self, stop_event: threading.Event, node_id: str, queue: multiprocessing.Queue):
@@ -84,8 +94,9 @@ class Node(pb2_grpc.NodeServicer):
         self.leaderId = None
         self.votedId = None
 
-        # if suspend, then False
+        # if suspend
         self.answer = True
+        self.wake_up = False
 
         # election timeout and reset-timeout event
         self.set_timeout = initialize_timeout()
@@ -104,11 +115,14 @@ class Node(pb2_grpc.NodeServicer):
         # scheduler for LEADER (each 50 ms) and CANDIDATE (once)
         self.leader_scheduler = sched.scheduler(time.time, time.sleep)
 
+        self.timer_stop = threading.Event()
+        self.timer_stop.set()
+        self.timer = MyThread(self.timer_stop, self)
+
 
         for id_ in SERVER_ADDRESS.keys():
             if id_ != self.id_:
                 self.addresses.append(SERVER_ADDRESS[id_])
-                # TODO: Is channel is sensitive to enabling of serve???
                 channel = grpc.insecure_channel(SERVER_ADDRESS[id_])
                 stub = pb2_grpc.NodeStub(channel)
                 self.list_of_stubs[id_] = (stub, channel,)
@@ -117,27 +131,37 @@ class Node(pb2_grpc.NodeServicer):
         if self.answer is False:
             return
         self.answer = False
-        # self.raise_term(self.term, state_reset=State.FOLLOWER, timeout_reset=True)
-        print(f"slept")
-        self.answer = True
-        print(f"woke up after {request.period}")
+        self.stop_event.set()
+
+        self.timer.stopped.set()
+        self.timer_stop.set()
+        print(f"Command from client: suspend {request.period}")
+        print(f"Sleeping for {request.period} seconds")
+        time.sleep(request.period)
+        if self.state == State.LEADER:
+            # self.timer.stopped.clear()
+            # self.timer.run()
+            self.wake_up = True
+            self.stop_event.set()
+            return pb2.SuspendResponse()
+        self.wake_up = True
         self.stop_event.set()
         return pb2.SuspendResponse()
     
     def RequestVote(self, request, context):
         if self.answer is False:
             return
-        # self.stop_event.set()
+        self.stop_event.set()
         if request.term > self.term:
             if self.state == State.FOLLOWER:
                 timeout_reset = False
             else:
                 timeout_reset = True
             self.raise_term(request.term, state_reset=State.FOLLOWER, timeout_reset=timeout_reset)
-            print(f"I am {State.FOLLOWER.name} now")
-            # self.stop_event.set()
         elif request.term < self.term:
+            self.stop_event.set()
             return pb2.VoteResponse(term=self.term, vote=False)
+        self.stop_event.set()
         return pb2.VoteResponse(term=self.term, vote=self.vote_for(request.candidateId))
 
     def AppendEntries(self, request, context):
@@ -150,14 +174,12 @@ class Node(pb2_grpc.NodeServicer):
             else:
                 set_timeout = True
             self.raise_term(request.term, state_reset=State.FOLLOWER, timeout_reset=set_timeout, leaderId=request.leaderId)
-            print(f"I am {State.FOLLOWER.name} now")
             return pb2.AppendResponse(term=self.term, success=True)
         elif request.term == self.term:
             if self.state == State.LEADER:
                 return pb2.AppendResponse(term=self.term, success=False)
             if self.state == State.CANDIDATE: # or self.state == State.LEADER:
                 self.raise_term(request.term, state_reset=State.FOLLOWER, timeout_reset=True, leaderId=request.leaderId)
-                print(f"I am {State.FOLLOWER.name} now {self.set_timeout}")
                 return pb2.AppendResponse(term=self.term, success=True)
             self.to_vote = False
             self.leaderId = request.leaderId
@@ -172,33 +194,33 @@ class Node(pb2_grpc.NodeServicer):
     def GetLeader(self, request, context):
         if self.answer is False:
             return
+        print(f"Command from client: getleader")
         if self.state == State.LEADER:
+            print(f"{SERVER_ID} {SERVER_ADDR}:{SERVER_PORT}")
             return pb2.GetLeaderResponse(nothing_id_vote=1, info_1=pb2.GetID(leaderId=SERVER_ID, ip_address=f"{SERVER_ADDR}:{SERVER_PORT}"))
         if self.leaderId:
-             return pb2.GetLeaderResponse(nothing_id_vote=1, info_1=pb2.GetID(leaderId=self.leaderId, ip_address=SERVER_ADDRESS[self.leaderId]))
+            print(f"{self.leaderId} {SERVER_ADDRESS[self.leaderId]}")
+            return pb2.GetLeaderResponse(nothing_id_vote=1, info_1=pb2.GetID(leaderId=self.leaderId, ip_address=SERVER_ADDRESS[self.leaderId]))
         if self.votedId:
+            print(f"I have no leader. Voted for {self.votedId}")
             return pb2.GetLeaderResponse(nothing_id_vote=2, info_2=pb2.GetVoted(votedId=self.votedId))
         return pb2.GetLeaderResponse(nothing_id_vote=0, info_0=pb2.GetNothing())
 
     def candidate_state(self):
         if self.state == State.CANDIDATE:
+            print(f"Voted for node {self.id_}")
             for key in self.list_of_stubs.keys():
                 if self.state == State.CANDIDATE:
                     try:
-                        response = self.list_of_stubs[key][0].RequestVote(pb2.VoteRequest(term=self.term, candidateId=self.id_), timeout=0.3)
+                        response = self.list_of_stubs[key][0].RequestVote(pb2.VoteRequest(term=self.term, candidateId=self.id_), timeout=0.15)
                         if response.vote is False:
                             # if self.state == State.CANDIDATE:
                             self.raise_term(response.term, state_reset=State.FOLLOWER, timeout_reset=True)
-                            print(f"I am {State.FOLLOWER.name} now {self.set_timeout}")
                             self.scheduler_lock()
                             return
                         self.amount_of_votes += 1
                         # self.check_for_won_election()
                     except grpc._channel._InactiveRpcError:
-                        # try:
-                        #     grpc.channel_ready_future(channel=self.list_of_stubs[key][-1]).result(timeout=0.02)
-                        # except grpc.FutureTimeoutError:
-                        #     pass
                         pass
                 else:
                     self.scheduler_lock()
@@ -216,27 +238,9 @@ class Node(pb2_grpc.NodeServicer):
                     else:
                         self.scheduler_lock()
                         return
-                    # if self.state == State.LEADER and self.answer:
-                    #     try:
-                    #         try:
-                    #             grpc.channel_ready_future(channel=self.list_of_stubs[key][-1]).result(timeout=0.01)
-                    #         except grpc.FutureTimeoutError:
-                    #             pass
-                    #         node_stub = pb2_grpc.NodeStub(self.list_of_stubs[key][-1])
-                    #         response = node_stub.AppendEntries(pb2.AppendRequest(term=self.term, leaderId=self.id_))
-                    #         if response.success is False:
-                    #             if self.state == State.LEADER:
-                    #                 self.raise_term(response.term, state_reset=State.FOLLOWER, timeout_reset=True)
-                    #                 print(f"I am {self.state.name} now {self.set_timeout}")
-                    #             self.scheduler_lock()
-                    #             return
-                    #     except grpc._channel._InactiveRpcError:
-                    #         pass
-                    # else:
-                    #     self.scheduler_lock()
-                    #     return
-                if self.state == State.LEADER and self.answer is True:
-                    self.leader_scheduler.enter(0.05, 0.05, self.leader_state)
+                # if self.state == State.LEADER and self.answer is True:
+                #     self.timer.stopped.clear()
+                #     self.timer.run()
         except Exception:
             pass
 
@@ -247,23 +251,17 @@ class Node(pb2_grpc.NodeServicer):
                 key = self.queue.get()
                 if self.state == State.LEADER and self.answer is True:
                     try:
-                        # try:
-                        #     grpc.channel_ready_future(channel=self.list_of_stubs[key][-1]).result(timeout=0.01)
-                        # except grpc.FutureTimeoutError:
-                        #     continue
-                        # node_stub = pb2_grpc.NodeStub(self.list_of_stubs[key][-1])
-                        # response = node_stub.AppendEntries(pb2.AppendRequest(term=self.term, leaderId=self.id_), timeout=0.05)
                         response = self.list_of_stubs[key][0].AppendEntries(pb2.AppendRequest(term=self.term, leaderId=self.id_), timeout=0.05)
                         if response.success is False:
                             if self.state == State.LEADER:
                                 self.raise_term(response.term, state_reset=State.FOLLOWER, timeout_reset=True)
-                                print(f"I am {self.state.name} now {self.set_timeout}")
+                                print(f"I am a {self.state.name}. Term {self.term}")
                             self.scheduler_lock()
-                            # return
                     except grpc._channel._InactiveRpcError:
+                        # channel = grpc.insecure_channel(SERVER_ADDRESS[key])
+                        # stub = pb2_grpc.NodeStub(channel)
+                        # self.list_of_stubs[key] = (stub, channel,)
                         pass
-                        # tmp_addr = self.list_of_stubs[key][1]
-                        # self.list_of_stubs[key] = (tmp_addr, grpc.insecure_channel(tmp_addr),)
                 else:
                     self.scheduler_lock()
         except KeyboardInterrupt or ValueError:
@@ -282,23 +280,15 @@ class Node(pb2_grpc.NodeServicer):
         self.term = term
 
         if self.state == State.CANDIDATE:
-            # self.votedId = self.id_
-            # self.to_vote = False
-            # self.amount_of_votes = 1
-            # self.leaderId = None
             self.lead_vote_id_amount(to_vote=False, votedId=self.id_, amount_of_votes=1)
+            print("The leader is dead")
+            print(f"I am a {self.state.name}. Term: {self.term}")
         elif self.state == State.LEADER:
-            # self.votedId = None
-            # self.to_vote = False
-            # self.leaderId = self.id_
             self.lead_vote_id_amount(leaderId=self.id_, to_vote=False, amount_of_votes=self.amount_of_votes)
+            print(f"I am a {self.state.name}. Term: {self.term}")
         else:
-            # self.amount_of_votes = 0
             if prev_state == State.FOLLOWER:
                 if leaderId is not None:
-                    # self.leaderId = leaderId
-                    # self.to_vote = False
-                    # self.votedId = None
                     self.lead_vote_id_amount(leaderId=leaderId, to_vote=False)
                 else:
                     if prev_term < self.term:
@@ -306,17 +296,12 @@ class Node(pb2_grpc.NodeServicer):
                     else:
                         self.lead_vote_id_amount(leaderId=self.leaderId, to_vote=self.to_vote, votedId=self.votedId)
             else:
-                # self.amount_of_votes = 0
+                self.timer_stop.set()
                 if leaderId is not None:
-                    # self.leaderId = leaderId
-                    # self.to_vote = False
-                    # self.votedId = None
                     self.lead_vote_id_amount(leaderId=leaderId, to_vote=False)
                 else:
-                    # self.leaderId = None
-                    # self.to_vote = True
-                    # self.votedId = None
                     self.lead_vote_id_amount()
+                print(f"I am a {self.state.name}. Term: {self.term}")
         if timeout_reset is True:
             if self.state == State.LEADER:
                 self.set_timeout = None
@@ -325,7 +310,7 @@ class Node(pb2_grpc.NodeServicer):
             else:
                 self.set_timeout = initialize_timeout()
         if set_event is True:
-            self.stop_event.set() # ???
+            self.stop_event.set()
         # print(f" I am {self.state.name} now")
 
     def lead_vote_id_amount(self, leaderId=None, to_vote=True, votedId=None, amount_of_votes=0):
@@ -336,59 +321,75 @@ class Node(pb2_grpc.NodeServicer):
         
     def vote_for(self, candidateId):
         if self.to_vote is True:
-            self.votedId = candidateId
-            self.leaderId = None
-            self.to_vote = False
-            self.amount_of_votes = 0
+            self.lead_vote_id_amount(to_vote=False, votedId=candidateId)
+            print(f"Voted for node {candidateId}")
             return True
         return False
     
     def check_for_won_election(self):
         if self.amount_of_votes >= self.number_of_nodes // 2 + 1:
-                self.raise_term(self.term, state_reset=State.LEADER, timeout_reset=True)
-                print(f"I am {self.state.name} {self.set_timeout} {self.amount_of_votes}")
-                print(f"self.term = {self.term}")
-                self.scheduler_lock()
-                self.leader_scheduler.enter(0.05, 0.05, self.leader_state)
-                self.leader_scheduler.run()
+            self.raise_term(self.term, state_reset=State.LEADER, timeout_reset=True)
+            self.scheduler_lock()
+
+            self.timer.stopped.clear()
+            self.timer.run()
     
     def scheduler_lock(self):
+        # self.timer.stopped.set()
+        self.timer_stop.set()
+
         for event in self.leader_scheduler.queue:
             self.leader_scheduler.cancel(event)
         while not self.queue.empty():
             self.queue.get()
 
 
+import tqdm
+
+
+def retry_wait(stop_event, timeout, max_retries=10):
+    for _ in tqdm.trange(max_retries, desc="Waiting for the server to start", disable=max_retries == 1):
+        if stop_event.wait(timeout):
+            return True
+        time.sleep(randint(25, 75) / 1000)
+    return False
+
 # server loop
 def server_launch(stop_event: threading.Event, node: Node):
     print(node.set_timeout, node.state.name)
+
+    retry_wait(stop_event, randint(100, 200) / 1000, max_retries=20)
+
     while True:
         set_timeout = node.set_timeout
         # set event (return true)
         if stop_event.wait(timeout=set_timeout) is True:
-            if node.answer is True:
-                stop_event.clear()
+            if node.answer is False:
+                if node.wake_up is True:
+                    node.wake_up = False
+                    node.answer = True
+                    if node.state == State.LEADER:
+                        node.timer.stopped.clear()
+                        node.timer.run()
+                    stop_event.clear()
             continue
         # timeout appears
         else:
+            print("here")
             # becoming a CANDIDATE
             if node.state == State.FOLLOWER:
                 node.raise_term(node.term + 1, state_reset=State.CANDIDATE, timeout_reset=True, set_event=False)
-                print(f"I am {node.state.name} now (was FOLLOWER)")
-                node.leader_scheduler.enter(0.05, 0.05, node.candidate_state)
+                node.leader_scheduler.enter(0.05, 0, node.candidate_state)
                 node.leader_scheduler.run()
             # becoming a LEADER or again FOLLOWER
             elif node.state == State.CANDIDATE:
                 if node.amount_of_votes < node.number_of_nodes // 2 + 1:
                     node.raise_term(node.term, state_reset=State.FOLLOWER, timeout_reset=True, set_event=False)
-                    print(f"I am {node.state.name} now")
                 else:
-                    print("I am leader")
                     node.raise_term(node.term, state_reset=State.LEADER, timeout_reset=True, set_event=False)
-                    print(f"I am {node.state.name}")
-                    print(f"self.term = {node.term}")
-                    node.leader_scheduler.enter(0.05, 0.05, node.leader_state)
-                    node.leader_scheduler.run()
+
+                    node.timer.stopped.clear()
+                    node.timer.run()
 
 
 def main():
@@ -397,6 +398,7 @@ def main():
     queue = multiprocessing.Queue(5)   # queue of connections
     thread_pool = []    # threads to serve the clients
     node = Node(stop_event, argv[-1], queue)
+    node.timer.start()
     for _ in range(5):
         worker = threading.Thread(target=node.send_message, daemon=True)
         worker.start()
@@ -413,6 +415,7 @@ def main():
     finally:
         node.server_works = False
         queue.close()
+        node.timer.join()
         # for each_thread in thread_pool:
         #     each_thread.terminate()
         server_node.stop(None)
