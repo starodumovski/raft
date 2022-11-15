@@ -35,6 +35,7 @@ class Client:
         self.addr = ''
 
     def start(self):
+        print("The client starts")
         while True:
             line = input("> ")
             if len(line) != 0:
