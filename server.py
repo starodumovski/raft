@@ -253,11 +253,11 @@ class Node(pb2_grpc.NodeServicer):
 
         if self.state == State.CANDIDATE:
             print("Leader is dead")
-            print(f"I am a {self.state.name}. Term: {self.term}")
+            print(f"I am a candidate. Term: {self.term}")
             print(f"Voted for node {self.id_}")
             self.lead_vote_id_amount(to_vote=False, votedId=self.id_, amount_of_votes=1)
         elif self.state == State.LEADER:
-            print(f"I am a {self.state.name}. Term: {self.term}")
+            print(f"I am a leader. Term: {self.term}")
             self.lead_vote_id_amount(leaderId=self.id_, to_vote=False, amount_of_votes=self.amount_of_votes)
         else:
             if prev_state == State.FOLLOWER:
@@ -269,7 +269,7 @@ class Node(pb2_grpc.NodeServicer):
                     else:
                         self.lead_vote_id_amount(leaderId=self.leaderId, to_vote=self.to_vote, votedId=self.votedId)
             else:
-                print(f"I am a {self.state.name}. Term: {self.term}")
+                print(f"I am a {self.state.name.lower()}. Term: {self.term}")
                 if leaderId is not None:
                     self.lead_vote_id_amount(leaderId=leaderId, to_vote=False)
                 else:
@@ -325,7 +325,7 @@ def retry_wait(stop_event, timeout, max_retries=10):
 
 # server loop
 def server_launch(stop_event: threading.Event, node: Node):
-    print(f"I am a {node.state.name}. Term: {node.term}")
+    print(f"I am a {node.state.name.lower()}. Term: {node.term}")
 
     print("Trying to find the current LEADER")
     retry_wait(stop_event, random.randint(100, 200) / 1000, max_retries=20)
@@ -372,8 +372,9 @@ def main():
         pb2_grpc.add_NodeServicer_to_server(node, server_node)
         server_node.add_insecure_port(f"{SERVER_ADDR}:{SERVER_PORT}")
         server_node.start()
+        print(f"The server starts at {SERVER_ADDR}:{SERVER_PORT}")
         time.sleep(1)
-        print(f"Listen the IPaddress: {SERVER_ADDR}:{SERVER_PORT}")
+        # print(f"Listen the IPaddress: {SERVER_ADDR}:{SERVER_PORT}")
         server_launch(stop_event, node)
     except KeyboardInterrupt:
         pass
