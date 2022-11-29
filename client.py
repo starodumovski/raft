@@ -29,15 +29,18 @@ def parse_string(stub: pb2_grpc.NodeStub, message: str):
         elif re.fullmatch(reg_get_value, message):
             data = message.split(" ")
             key_ = data[1]
-            # TODO
-
-            return None
+            response = stub.GetVal(pb2.GetValRequest(key=key_))
+            if response.success == True:
+                print(response.value)
+            else:
+                print(response.value)
+            return response
         elif re.fullmatch(reg_set_value, message):
             data = message.split(" ")
             key_ = data[1]
             value_ = data[2]
-            # TODO
-            return None
+            response = stub.SetVal(pb2.SetValRequest(key=key_, value=value_))
+            return response
         return None
     except grpc._channel._InactiveRpcError:
         return -1
