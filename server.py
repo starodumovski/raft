@@ -223,7 +223,20 @@ class Node(pb2_grpc.NodeServicer):
 
     def SetVal(self, request, context):
         # TODO: logging and saving
-        return pb2.SetValResponse(success=False)
+        if self.state == State.LEADER:
+            self.log[len(self.log)] = pb2.LogEntry(term=self.term, index=len(self.log), key=request.key,
+                                                   value=request.value)
+            is_success = True
+            # TODO send all to followers
+            return pb2.SetValResponse(term=self.term, success=is_success)
+        elif self.state == State.CANDIDATE:
+            return pb2.SetValResponse(term=self.term, success=False)
+        elif self.state == State.FOLLOWER:
+            if self.leaderId:
+                leader_stab = self.addresses[self.leaderId][0]
+                return leader_stab.SetVal(request, context)
+            else:
+                return pb2.SetValResponse(term=self.term, success=False)
 
     def GetVal(self, request, context):
         return pb2.GetValResponse(success=(request.key in self.storage), value=self.storage.get(request.key))

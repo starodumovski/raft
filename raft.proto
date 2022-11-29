@@ -41,7 +41,8 @@ message AppendRequest {
 message LogEntry {
     int64 index = 1;
     int64 term = 2;
-    string command = 3;
+    string key = 3;
+    string value = 4;
 }
 
 
