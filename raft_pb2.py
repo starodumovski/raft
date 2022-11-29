@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nraft.proto\"0\n\x0bVoteRequest\x12\x0c\n\x04term\x18\x01 \x01(\x03\x12\x13\n\x0b\x63\x61ndidateId\x18\x02 \x01(\t\"*\n\x0cVoteResponse\x12\x0c\n\x04term\x18\x01 \x01(\x03\x12\x0c\n\x04vote\x18\x02 \x01(\x08\"\x11\n\x0fSuspendResponse\" \n\x0eSuspendRequest\x12\x0e\n\x06period\x18\x01 \x01(\x05\"/\n\rAppendRequest\x12\x0c\n\x04term\x18\x01 \x01(\x03\x12\x10\n\x08leaderId\x18\x02 \x01(\t\"/\n\x0e\x41ppendResponse\x12\x0c\n\x04term\x18\x01 \x01(\x03\x12\x0f\n\x07success\x18\x02 \x01(\x08\"\x12\n\x10GetLeaderRequest\"\x91\x01\n\x11GetLeaderResponse\x12\x17\n\x0fnothing_id_vote\x18\x01 \x01(\x05\x12\x1d\n\x06info_0\x18\x02 \x01(\x0b\x32\x0b.GetNothingH\x00\x12\x18\n\x06info_1\x18\x03 \x01(\x0b\x32\x06.GetIDH\x00\x12\x1b\n\x06info_2\x18\x04 \x01(\x0b\x32\t.GetVotedH\x00\x42\r\n\x0bGetResponse\"\x0c\n\nGetNothing\"-\n\x05GetID\x12\x10\n\x08leaderId\x18\x01 \x01(\t\x12\x12\n\nip_address\x18\x02 \x01(\t\"\x1b\n\x08GetVoted\x12\x0f\n\x07votedId\x18\x01 \x01(\t2\xc6\x01\n\x04Node\x12,\n\x07Suspend\x12\x0f.SuspendRequest\x1a\x10.SuspendResponse\x12*\n\x0bRequestVote\x12\x0c.VoteRequest\x1a\r.VoteResponse\x12\x30\n\rAppendEntries\x12\x0e.AppendRequest\x1a\x0f.AppendResponse\x12\x32\n\tGetLeader\x12\x11.GetLeaderRequest\x1a\x12.GetLeaderResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nraft.proto\"0\n\x0bVoteRequest\x12\x0c\n\x04term\x18\x01 \x01(\x03\x12\x13\n\x0b\x63\x61ndidateId\x18\x02 \x01(\t\"*\n\x0cVoteResponse\x12\x0c\n\x04term\x18\x01 \x01(\x03\x12\x0c\n\x04vote\x18\x02 \x01(\x08\"\x11\n\x0fSuspendResponse\" \n\x0eSuspendRequest\x12\x0e\n\x06period\x18\x01 \x01(\x05\"/\n\rAppendRequest\x12\x0c\n\x04term\x18\x01 \x01(\x03\x12\x10\n\x08leaderId\x18\x02 \x01(\t\"/\n\x0e\x41ppendResponse\x12\x0c\n\x04term\x18\x01 \x01(\x03\x12\x0f\n\x07success\x18\x02 \x01(\x08\"\x12\n\x10GetLeaderRequest\"\x91\x01\n\x11GetLeaderResponse\x12\x17\n\x0fnothing_id_vote\x18\x01 \x01(\x05\x12\x1d\n\x06info_0\x18\x02 \x01(\x0b\x32\x0b.GetNothingH\x00\x12\x18\n\x06info_1\x18\x03 \x01(\x0b\x32\x06.GetIDH\x00\x12\x1b\n\x06info_2\x18\x04 \x01(\x0b\x32\t.GetVotedH\x00\x42\r\n\x0bGetResponse\"\x0c\n\nGetNothing\"-\n\x05GetID\x12\x10\n\x08leaderId\x18\x01 \x01(\t\x12\x12\n\nip_address\x18\x02 \x01(\t\"\x1b\n\x08GetVoted\x12\x0f\n\x07votedId\x18\x01 \x01(\t\"+\n\rSetValRequest\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\"!\n\x0eSetValResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"\x1c\n\rGetValRequest\x12\x0b\n\x03key\x18\x01 \x01(\t\"0\n\x0eGetValResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05value\x18\x02 \x01(\t2\x9c\x02\n\x04Node\x12,\n\x07Suspend\x12\x0f.SuspendRequest\x1a\x10.SuspendResponse\x12*\n\x0bRequestVote\x12\x0c.VoteRequest\x1a\r.VoteResponse\x12\x30\n\rAppendEntries\x12\x0e.AppendRequest\x1a\x0f.AppendResponse\x12\x32\n\tGetLeader\x12\x11.GetLeaderRequest\x1a\x12.GetLeaderResponse\x12)\n\x06SetVal\x12\x0e.SetValRequest\x1a\x0f.SetValResponse\x12)\n\x06GetVal\x12\x0e.GetValRequest\x1a\x0f.GetValResponseb\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'raft_pb2', globals())
@@ -42,6 +42,14 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _GETID._serialized_end=486
   _GETVOTED._serialized_start=488
   _GETVOTED._serialized_end=515
-  _NODE._serialized_start=518
-  _NODE._serialized_end=716
+  _SETVALREQUEST._serialized_start=517
+  _SETVALREQUEST._serialized_end=560
+  _SETVALRESPONSE._serialized_start=562
+  _SETVALRESPONSE._serialized_end=595
+  _GETVALREQUEST._serialized_start=597
+  _GETVALREQUEST._serialized_end=625
+  _GETVALRESPONSE._serialized_start=627
+  _GETVALRESPONSE._serialized_end=675
+  _NODE._serialized_start=678
+  _NODE._serialized_end=962
 # @@protoc_insertion_point(module_scope)
