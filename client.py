@@ -1,12 +1,12 @@
-
 import grpc
 import raft_pb2 as pb2
 import raft_pb2_grpc as pb2_grpc
 import re
 
 reg_suspend = r"suspend \d+"
-reg_connect = r"connect \d+.\d+.\d+.\d+:\d+"
+reg_connect = r"connect \d+.\d+.\d+.\d+ \d+"
 reg_leader = r"getleader"
+
 
 def parse_string(stub: pb2_grpc.NodeStub, message: str):
     try:
@@ -27,28 +27,37 @@ def parse_string(stub: pb2_grpc.NodeStub, message: str):
     except grpc._channel._InactiveRpcError:
         return -1
 
+
 class Client:
     def __init__(self):
         self.stub_ = None
         self.channel_ = None
-    
+        self.addr = ''
+
     def start(self):
+        print("The client starts")
         while True:
             line = input("> ")
             if len(line) != 0:
                 if line == "quit":
+                    print("The client ends")
                     break
                 elif re.fullmatch(reg_connect, line):
-                    if not self.connect(line.split(maxsplit=1)[-1]):
+                    for_address = str(line.split(maxsplit=1)[-1]).split()
+                    self.addr = "{}:{}".format(for_address[0], for_address[1])
+                    if not self.connect(self.addr):
                         print("No Node with such address")
                 elif self.stub_ is not None:
                     response = parse_string(self.stub_, line)
                     if response is None:
                         print("ERROR: unsupported command")
                     if response == -1:
-                        print("Disconnected due inactivity from service side")
+                        print(f"The server {self.addr} is unavailable")
                         self.stub_ = None
                         self.channel_ = None
+                        self.addr = ''
+                elif self.stub_ is None:
+                    print("You may need to connect first")
 
     def connect(self, ip_addr: str):
         channel = grpc.insecure_channel(ip_addr)
