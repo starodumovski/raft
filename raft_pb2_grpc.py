@@ -34,6 +34,16 @@ class NodeStub(object):
                 request_serializer=raft__pb2.GetLeaderRequest.SerializeToString,
                 response_deserializer=raft__pb2.GetLeaderResponse.FromString,
                 )
+        self.SetVal = channel.unary_unary(
+                '/Node/SetVal',
+                request_serializer=raft__pb2.SetValRequest.SerializeToString,
+                response_deserializer=raft__pb2.SetValResponse.FromString,
+                )
+        self.GetVal = channel.unary_unary(
+                '/Node/GetVal',
+                request_serializer=raft__pb2.GetValRequest.SerializeToString,
+                response_deserializer=raft__pb2.GetValResponse.FromString,
+                )
 
 
 class NodeServicer(object):
@@ -63,6 +73,18 @@ class NodeServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def SetVal(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetVal(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_NodeServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -85,6 +107,16 @@ def add_NodeServicer_to_server(servicer, server):
                     servicer.GetLeader,
                     request_deserializer=raft__pb2.GetLeaderRequest.FromString,
                     response_serializer=raft__pb2.GetLeaderResponse.SerializeToString,
+            ),
+            'SetVal': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetVal,
+                    request_deserializer=raft__pb2.SetValRequest.FromString,
+                    response_serializer=raft__pb2.SetValResponse.SerializeToString,
+            ),
+            'GetVal': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetVal,
+                    request_deserializer=raft__pb2.GetValRequest.FromString,
+                    response_serializer=raft__pb2.GetValResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -161,5 +193,39 @@ class Node(object):
         return grpc.experimental.unary_unary(request, target, '/Node/GetLeader',
             raft__pb2.GetLeaderRequest.SerializeToString,
             raft__pb2.GetLeaderResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def SetVal(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/Node/SetVal',
+            raft__pb2.SetValRequest.SerializeToString,
+            raft__pb2.SetValResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def GetVal(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/Node/GetVal',
+            raft__pb2.GetValRequest.SerializeToString,
+            raft__pb2.GetValResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
