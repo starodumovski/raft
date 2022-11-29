@@ -108,6 +108,9 @@ class Node(pb2_grpc.NodeServicer):
         # scheduler for LEADER (each 50 ms) and CANDIDATE (once)
         self.leader_scheduler = sched.scheduler(time.time, time.sleep)
 
+        #key-value
+        self.storage = {}
+
         for id_ in SERVER_ADDRESS.keys():
             if id_ != self.id_:
                 self.addresses.append(SERVER_ADDRESS[id_])
@@ -184,6 +187,13 @@ class Node(pb2_grpc.NodeServicer):
             print(f"I have no leader. Voted for {self.votedId}")
             return pb2.GetLeaderResponse(nothing_id_vote=2, info_2=pb2.GetVoted(votedId=self.votedId))
         return pb2.GetLeaderResponse(nothing_id_vote=0, info_0=pb2.GetNothing())
+
+    def SetVal(self, request, context):
+        # TODO: logging and saving
+        return pb2.SetValResponse(success=False)
+
+    def GetVal(self, request, context):
+        return pb2.GetValResponse(success=(request.key in self.storage), value=self.storage.get(request.key))
 
     def candidate_state(self):
         if self.state == State.CANDIDATE:
