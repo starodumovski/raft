@@ -7,6 +7,9 @@ reg_suspend = r"suspend \d+"
 reg_connect = r"connect \d+.\d+.\d+.\d+ \d+"
 reg_leader = r"getleader"
 
+reg_get_value = r"getval \s+ \s+"
+reg_set_value = r"setval \s+"
+
 
 def parse_string(stub: pb2_grpc.NodeStub, message: str):
     try:
@@ -47,6 +50,15 @@ class Client:
                     self.addr = "{}:{}".format(for_address[0], for_address[1])
                     if not self.connect(self.addr):
                         print("No Node with such address")
+                elif re.fullmatch(reg_get_value, line):
+                    data = line.split(" ")
+                    key_ = data[1]
+                    value_ = data[2]
+                    # TODO
+                elif re.fullmatch(reg_set_value, line):
+                    data = line.split(" ")
+                    key_ = data[1]
+                    # TODO
                 elif self.stub_ is not None:
                     response = parse_string(self.stub_, line)
                     if response is None:
