@@ -32,7 +32,18 @@ message SuspendRequest {
 message AppendRequest {
     int64 term = 1;
     string leaderId = 2;
+    int64 prevLogIndex = 3;
+    int64 prevLogTerm = 4;
+    repeated LogEntry entries = 5;
+    int64 leaderCommit = 6;
 }
+
+message LogEntry {
+    int64 index = 1;
+    int64 term = 2;
+    string command = 3;
+}
+
 
 message AppendResponse {
     int64 term = 1;

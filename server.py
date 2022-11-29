@@ -148,33 +148,61 @@ class Node(pb2_grpc.NodeServicer):
             return pb2.VoteResponse(term=self.term, vote=False)
         return pb2.VoteResponse(term=self.term, vote=self.vote_for(request.candidateId))
 
+    def check_conflicts(self, request):
+        '''
+        If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it.
+        '''
+        for i in range(len(request.entries)):
+            if request.entries[i].index in self.log:
+                if self.log[request.entries[i].index].term != request.entries[i].term:
+                    for j in range(len(self.log) - 1, request.entries[i].index - 1, -1):
+                        self.log.pop(j)
+                    break
+
+    def append_new_entries(self, request):
+        for i in range(len(request.entries)):
+            if request.entries[i].index not in self.log:
+                self.log[request.entries[i].index] = request.entries[i]
+
     def AppendEntries(self, request, context):
         if self.answer is False:
             return
         self.stop_event.set()
-        if request.term > self.term:
-            if self.state == State.FOLLOWER:
-                set_timeout = False
-            else:
-                set_timeout = True
-            self.raise_term(request.term, state_reset=State.FOLLOWER, timeout_reset=set_timeout,
-                            leaderId=request.leaderId)
-            return pb2.AppendResponse(term=self.term, success=True)
-        elif request.term == self.term:
-            if self.state == State.LEADER:
-                return pb2.AppendResponse(term=self.term, success=False)
-            if self.state == State.CANDIDATE:
-                self.raise_term(request.term, state_reset=State.FOLLOWER, timeout_reset=True, leaderId=request.leaderId)
-                return pb2.AppendResponse(term=self.term, success=True)
-            self.to_vote = False
-            self.leaderId = request.leaderId
-            self.votedId = None
-            self.amount_of_votes = 0
-            self.stop_event.set()
-            return pb2.AppendResponse(term=self.term, success=True)
-        else:
-            self.stop_event.set()
+
+        if self.term > request.term:
             return pb2.AppendResponse(term=self.term, success=False)
+        elif request.prevLogTerm not in self.log:
+            return pb2.AppendResponse(term=self.term, success=False)
+
+        self.check_conflicts(request)
+        self.append_new_entries(request)
+
+        if request.leaderCommit > self.commitIndex:
+            self.commitIndex = min(request.leaderCommit, len(self.log) - 1)
+
+        # if request.term > self.term:
+        #     if self.state == State.FOLLOWER:
+        #         set_timeout = False
+        #     else:
+        #         set_timeout = True
+        #     self.raise_term(request.term, state_reset=State.FOLLOWER, timeout_reset=set_timeout,
+        #                     leaderId=request.leaderId)
+        #     return pb2.AppendResponse(term=self.term, success=True)
+        # elif request.term == self.term:
+        #     if self.state == State.LEADER:
+        #         return pb2.AppendResponse(term=self.term, success=False)
+        #     if self.state == State.CANDIDATE:
+        #         self.raise_term(request.term, state_reset=State.FOLLOWER, timeout_reset=True, leaderId=request.leaderId)
+        #         return pb2.AppendResponse(term=self.term, success=True)
+        #     self.to_vote = False
+        #     self.leaderId = request.leaderId
+        #     self.votedId = None
+        #     self.amount_of_votes = 0
+        #     self.stop_event.set()
+        #     return pb2.AppendResponse(term=self.term, success=True)
+        # else:
+        #     self.stop_event.set()
+        #     return pb2.AppendResponse(term=self.term, success=False)
 
     def GetLeader(self, request, context):
         if self.answer is False:
