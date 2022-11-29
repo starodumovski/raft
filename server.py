@@ -108,7 +108,7 @@ class Node(pb2_grpc.NodeServicer):
         # scheduler for LEADER (each 50 ms) and CANDIDATE (once)
         self.leader_scheduler = sched.scheduler(time.time, time.sleep)
 
-        #key-value
+        # key-value
         self.storage = {}
 
         for id_ in SERVER_ADDRESS.keys():
@@ -138,7 +138,13 @@ class Node(pb2_grpc.NodeServicer):
             else:
                 timeout_reset = True
             self.raise_term(request.term, state_reset=State.FOLLOWER, timeout_reset=timeout_reset)
-        elif request.term < self.term:
+        if request.term < self.term:
+            return pb2.VoteResponse(term=self.term, vote=False)
+        elif self.to_vote is False:
+            return pb2.VoteResponse(term=self.term, vote=False)
+        elif request.lastLogIndex < self.lastLogIndex:
+            return pb2.VoteResponse(term=self.term, vote=False)
+        elif request.lastLogIndex == self.lastLogIndex and request.lastLogTerm < self.lastLogTerm:
             return pb2.VoteResponse(term=self.term, vote=False)
         return pb2.VoteResponse(term=self.term, vote=self.vote_for(request.candidateId))
 
@@ -169,7 +175,6 @@ class Node(pb2_grpc.NodeServicer):
         else:
             self.stop_event.set()
             return pb2.AppendResponse(term=self.term, success=False)
-
 
     def GetLeader(self, request, context):
         if self.answer is False:
@@ -293,7 +298,7 @@ class Node(pb2_grpc.NodeServicer):
             else:
                 self.set_timeout = initialize_timeout()
         if set_event is True:
-            self.stop_event.set() 
+            self.stop_event.set()
 
     def lead_vote_id_amount(self, leaderId=None, to_vote=True, votedId=None, amount_of_votes=0):
         self.leaderId = leaderId
