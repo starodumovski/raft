@@ -110,6 +110,7 @@ class Node(pb2_grpc.NodeServicer):
 
         # key-value
         self.storage = {}
+        self.log = {}
 
         for id_ in SERVER_ADDRESS.keys():
             if id_ != self.id_:
@@ -224,8 +225,9 @@ class Node(pb2_grpc.NodeServicer):
     def SetVal(self, request, context):
         # TODO: logging and saving
         if self.state == State.LEADER:
-            self.log[len(self.log)] = pb2.LogEntry(term=self.term, index=len(self.log), key=request.key,
-                                                   value=request.value)
+            self.log[len(self.log)] = pb2.LogEntry(term=self.term,
+                                                    index=len(self.log), 
+                                                    command=f"{request.key}={request.value}")
             is_success = True
             # TODO send all to followers
             return pb2.SetValResponse(term=self.term, success=is_success)
