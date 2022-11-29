@@ -167,6 +167,7 @@ class Node(pb2_grpc.NodeServicer):
             self.stop_event.set()
             return pb2.AppendResponse(term=self.term, success=False)
 
+
     def GetLeader(self, request, context):
         if self.answer is False:
             return
