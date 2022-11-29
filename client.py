@@ -26,6 +26,17 @@ def parse_string(stub: pb2_grpc.NodeStub, message: str):
             elif response.nothing_id_vote == 2:
                 print(response.info_2.votedId)
             return response
+        elif re.fullmatch(reg_get_value, message):
+            data = message.split(" ")
+            key_ = data[1]
+            value_ = data[2]
+            # TODO
+            return None
+        elif re.fullmatch(reg_set_value, message):
+            data = message.split(" ")
+            key_ = data[1]
+            # TODO
+            return None
         return None
     except grpc._channel._InactiveRpcError:
         return -1
@@ -50,15 +61,6 @@ class Client:
                     self.addr = "{}:{}".format(for_address[0], for_address[1])
                     if not self.connect(self.addr):
                         print("No Node with such address")
-                elif re.fullmatch(reg_get_value, line):
-                    data = line.split(" ")
-                    key_ = data[1]
-                    value_ = data[2]
-                    # TODO
-                elif re.fullmatch(reg_set_value, line):
-                    data = line.split(" ")
-                    key_ = data[1]
-                    # TODO
                 elif self.stub_ is not None:
                     response = parse_string(self.stub_, line)
                     if response is None:
