@@ -40,6 +40,7 @@ def parse_string(stub: pb2_grpc.NodeStub, message: str):
             key_ = data[1]
             value_ = data[2]
             response = stub.SetVal(pb2.SetValRequest(key=key_, value=value_))
+            print(response.success)
             return response
         return None
     except grpc._channel._InactiveRpcError:
