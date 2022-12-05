@@ -111,9 +111,16 @@ class Node(pb2_grpc.NodeServicer):
         # key-value
         self.storage = {}
         self.log = {}
+        self.nextIndex = {}
+        self.matchIndex = {}
+
+        self.commitIndex = 0
+        self.appliedIndex = 0
 
         for id_ in SERVER_ADDRESS.keys():
             if id_ != self.id_:
+                self.nextIndex[id_] = 0
+                self.matchIndex[id_] = 0
                 self.addresses.append(SERVER_ADDRESS[id_])
                 channel = grpc.insecure_channel(SERVER_ADDRESS[id_])
                 stub = pb2_grpc.NodeStub(channel)
@@ -143,9 +150,11 @@ class Node(pb2_grpc.NodeServicer):
             return pb2.VoteResponse(term=self.term, vote=False)
         elif self.to_vote is False:
             return pb2.VoteResponse(term=self.term, vote=False)
-        elif request.lastLogIndex < self.lastLogIndex:
+        # elif request.lastLogIndex < self.lastLogIndex:
+        elif request.lastLogIndex < len(self.log) - 1:
             return pb2.VoteResponse(term=self.term, vote=False)
-        elif request.lastLogIndex == self.lastLogIndex and request.lastLogTerm < self.lastLogTerm:
+        # elif request.lastLogIndex == self.lastLogIndex and request.lastLogTerm < self.lastLogTerm:
+        elif request.lastLogIndex == len(self.log) - 1 and request.lastLogTerm < self.log[len(self.log) - 1].term:
             return pb2.VoteResponse(term=self.term, vote=False)
         return pb2.VoteResponse(term=self.term, vote=self.vote_for(request.candidateId))
 
@@ -156,9 +165,9 @@ class Node(pb2_grpc.NodeServicer):
         for i in range(len(request.entries)):
             if request.entries[i].index in self.log:
                 if self.log[request.entries[i].index].term != request.entries[i].term:
-                    for j in range(len(self.log) - 1, request.entries[i].index - 1, -1):
-                        self.log.pop(j)
-                    break
+                    self.log = {k:v for k,v in self.log.items() if k < request.entries[i].index}
+                    # do we need to stop?
+                    # break
 
     def append_new_entries(self, request):
         for i in range(len(request.entries)):
@@ -170,6 +179,15 @@ class Node(pb2_grpc.NodeServicer):
             return
         self.stop_event.set()
 
+        if request.term > self.term:
+            if self.state == State.FOLLOWER:
+                set_timeout = False
+            else:
+                set_timeout = True
+            self.raise_term(request.term, state_reset=State.FOLLOWER, timeout_reset=set_timeout,
+                            leaderId=request.leaderId)
+            # return pb2.AppendResponse(term=self.term, success=True)
+
         if self.term > request.term:
             return pb2.AppendResponse(term=self.term, success=False)
         elif request.prevLogTerm not in self.log:
@@ -180,7 +198,12 @@ class Node(pb2_grpc.NodeServicer):
 
         if request.leaderCommit > self.commitIndex:
             self.commitIndex = min(request.leaderCommit, len(self.log) - 1)
-
+        self.to_vote = False
+        self.leaderId = request.leaderId
+        self.votedId = None
+        self.amount_of_votes = 0
+        self.stop_event.set()
+        return pb2.AppendResponse(term=self.term, success=True)
         # if request.term > self.term:
         #     if self.state == State.FOLLOWER:
         #         set_timeout = False
@@ -225,20 +248,27 @@ class Node(pb2_grpc.NodeServicer):
     def SetVal(self, request, context):
         # TODO: logging and saving
         if self.state == State.LEADER:
-            self.log[len(self.log)] = pb2.LogEntry(term=self.term,
-                                                    index=len(self.log), 
-                                                    command=f"{request.key}={request.value}")
+            self.log[len(self.log)] = pb2.LogEntry(
+                term=self.term,
+                index=len(self.log), 
+                command=pb2.Command(name='SetVal', key=request.key, value=request.value))
+            self.appliedIndex += 1
+
             is_success = True
             # TODO send all to followers
+
             return pb2.SetValResponse(term=self.term, success=is_success)
         elif self.state == State.CANDIDATE:
             return pb2.SetValResponse(term=self.term, success=False)
         elif self.state == State.FOLLOWER:
             if self.leaderId:
-                leader_stab = self.addresses[self.leaderId][0]
-                return leader_stab.SetVal(request, context)
+                leader_stub = self.addresses[self.leaderId][0]
+                return leader_stub.SetVal(request, context)
             else:
                 return pb2.SetValResponse(term=self.term, success=False)
+    
+    def TryToCommit(self):
+        pass
 
     def GetVal(self, request, context):
         return pb2.GetValResponse(success=(request.key in self.storage), value=self.storage.get(request.key))
