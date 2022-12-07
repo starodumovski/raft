@@ -7,8 +7,8 @@ reg_suspend = r"suspend \d+"
 reg_connect = r"connect \d+.\d+.\d+.\d+ \d+"
 reg_leader = r"getleader"
 
-reg_get_value = r"getval \s+"
-reg_set_value = r"setval \s+ \s+"
+reg_get_value = r"getval (?:[\D\d])+"
+reg_set_value = r"setval (?:[\D\d])+ (?:[\D\d])+"
 
 
 def parse_string(stub: pb2_grpc.NodeStub, message: str):
