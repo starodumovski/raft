@@ -77,7 +77,7 @@ def initialize_parameters() -> bool:
 
 def initialize_timeout():
     # return 1000
-    return randint(150, 300) / 1000
+    return randint(200, 400) / 1000
 
 
 class Node(pb2_grpc.NodeServicer):
@@ -172,8 +172,8 @@ class Node(pb2_grpc.NodeServicer):
             if request.entries[i].index in self.log:
                 if self.log[request.entries[i].index].term != request.entries[i].term:
                     self.log = {k:v for k,v in self.log.items() if k < request.entries[i].index}
-                    # do we need to stop?
-                    # break
+
+        
 
     def append_new_entries(self, request):
         for i in range(len(request.entries)):
@@ -192,15 +192,17 @@ class Node(pb2_grpc.NodeServicer):
                 set_timeout = True
             self.raise_term(request.term, state_reset=State.FOLLOWER, timeout_reset=set_timeout,
                             leaderId=request.leaderId)
-            # return pb2.AppendResponse(term=self.term, success=True)
         elif self.term > request.term:
             return pb2.AppendResponse(term=self.term, success=False)
-        elif request.prevLogTerm not in self.log:
-            return pb2.AppendResponse(term=self.term, success=False)
-
+        if len(request.entries) > 0:
+            if request.prevLogIndex != 0:
+                if request.prevLogIndex not in self.log:
+                    return pb2.AppendResponse(term=self.term, success=False)
+                else:
+                    if self.log[request.prevLogIndex].term != request.prevLogTerm:
+                        return pb2.AppendResponse(term=self.term, success=False)
         self.check_conflicts(request)
         self.append_new_entries(request)
-
         if request.leaderCommit > self.commitIndex:
             self.commitIndex = min(request.leaderCommit, len(self.log) - 1)
         if not self.state_machine:
@@ -211,29 +213,7 @@ class Node(pb2_grpc.NodeServicer):
         self.amount_of_votes = 0
         self.stop_event.set()
         return pb2.AppendResponse(term=self.term, success=True)
-        # if request.term > self.term:
-        #     if self.state == State.FOLLOWER:
-        #         set_timeout = False
-        #     else:
-        #         set_timeout = True
-        #     self.raise_term(request.term, state_reset=State.FOLLOWER, timeout_reset=set_timeout,
-        #                     leaderId=request.leaderId)
-        #     return pb2.AppendResponse(term=self.term, success=True)
-        # elif request.term == self.term:
-        #     if self.state == State.LEADER:
-        #         return pb2.AppendResponse(term=self.term, success=False)
-        #     if self.state == State.CANDIDATE:
-        #         self.raise_term(request.term, state_reset=State.FOLLOWER, timeout_reset=True, leaderId=request.leaderId)
-        #         return pb2.AppendResponse(term=self.term, success=True)
-        #     self.to_vote = False
-        #     self.leaderId = request.leaderId
-        #     self.votedId = None
-        #     self.amount_of_votes = 0
-        #     self.stop_event.set()
-        #     return pb2.AppendResponse(term=self.term, success=True)
-        # else:
-        #     self.stop_event.set()
-        #     return pb2.AppendResponse(term=self.term, success=False)
+
 
     def GetLeader(self, request, context):
         if self.answer is False:
@@ -254,31 +234,30 @@ class Node(pb2_grpc.NodeServicer):
 
     def SetVal(self, request, context):
         # TODO: logging and saving
+        print(f"Command from client: setval")
         if self.state == State.LEADER:
             self.log[len(self.log)] = pb2.LogEntry(
                 term=self.term,
                 index=len(self.log), 
                 command=pb2.Command(name='SetVal', key=request.key, value=request.value))
-            self.appliedIndex += 1
 
             is_success = True
-            # TODO send all to followers
-            print(request.key, request.value)
-
             return pb2.SetValResponse(success=is_success)
         elif self.state == State.CANDIDATE:
             return pb2.SetValResponse(success=False)
         elif self.state == State.FOLLOWER:
-            if self.leaderId:
-                leader_stub = self.addresses[self.leaderId][0]
-                return leader_stub.SetVal(request, context)
+            if self.leaderId is not None:
+                print("Here")
+                leader_stub = self.list_of_stubs[self.leaderId][0]
+                print(leader_stub)
+                print(leader_stub.__dict__)
+                return leader_stub.SetVal(request)
             else:
                 return pb2.SetValResponse(success=False)
-    
-    def TryToCommit(self):
-        pass
+        
 
     def GetVal(self, request, context):
+        print(f"Command from client: getval")
         return pb2.GetValResponse(success=(request.key in self.storage), value=self.storage.get(request.key))
 
     def candidate_state(self):
@@ -312,27 +291,28 @@ class Node(pb2_grpc.NodeServicer):
         all_sum = 0
         for tup in vals:
             all_sum += tup[1]
-            if all_sum > SERVICE_AMOUNT // 2:
+            if all_sum >= (SERVICE_AMOUNT - 1) // 2:
                 commitIndex = tup[0]
                 return commitIndex
         return commitIndex
     
-    # TODO: Thread
     def apply_to_state_machine(self):
         while True:
             if self.state_machine:
-                commit_idx = self.find_commitIndex(self.matchIndex.values())
-                print(f"Found = {commit_idx}")
+                if self.state == State.LEADER:
+                    commit_idx = self.find_commitIndex(self.matchIndex.values())
+                else:
+                    commit_idx = self.commitIndex
                 if self.commitIndex < commit_idx:
                     self.commitIndex = commit_idx
-                for i in range(self.appliedIndex + 1, self.commitIndex + 1):
-                    self.storage[self.log[i].command.key] = self.log[i].command.value
-                self.appliedIndex = self.commitIndex
-                self.state_machine = False
+                if self.commitIndex > self.appliedIndex:
+                    for i in range(self.appliedIndex + 1, self.commitIndex + 1):
+                        self.storage[self.log[i].command.key] = self.log[i].command.value
+                    self.appliedIndex = self.commitIndex
+                    self.state_machine = False
 
     def leader_state(self):
         try:
-            # self.apply_to_state_machine()
             if self.state_machine == False:
                 self.state_machine = True
             if self.state == State.LEADER and self.answer is True:
@@ -348,16 +328,6 @@ class Node(pb2_grpc.NodeServicer):
             pass
 
     def send_message(self):
-        '''
-        message AppendRequest {
-            int64 term = 1;
-            string leaderId = 2;
-            int64 prevLogIndex = 3;
-            int64 prevLogTerm = 4;
-            repeated LogEntry entries = 5;
-            int64 leaderCommit = 6;
-        }
-        '''
         try:
             while self.server_works:
                 key = self.queue.get()
@@ -373,7 +343,7 @@ class Node(pb2_grpc.NodeServicer):
                                                                         else self.log[self.matchIndex[key]].term,
                                                             entries=entries,
                                                             leaderCommit=self.commitIndex)
-                        response = self.list_of_stubs[key][0].AppendEntries(message_to_send, timeout=0.04)
+                        response = self.list_of_stubs[key][0].AppendEntries(message_to_send)
                         if response.success is False:
                             if self.state == State.LEADER:
                                 if response.term > self.term:

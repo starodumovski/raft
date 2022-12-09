@@ -33,14 +33,13 @@ def parse_string(stub: pb2_grpc.NodeStub, message: str):
             if response.success == True:
                 print(response.value)
             else:
-                print(response.value)
+                print("None")
             return response
         elif re.fullmatch(reg_set_value, message):
             data = message.split(" ")
             key_ = data[1]
             value_ = data[2]
             response = stub.SetVal(pb2.SetValRequest(key=key_, value=value_))
-            print(response.success)
             return response
         return None
     except grpc._channel._InactiveRpcError:
