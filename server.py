@@ -165,15 +165,10 @@ class Node(pb2_grpc.NodeServicer):
         return pb2.VoteResponse(term=self.term, vote=self.vote_for(request.candidateId))
 
     def check_conflicts(self, request):
-        '''
-        If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it.
-        '''
         for i in range(len(request.entries)):
             if request.entries[i].index in self.log:
                 if self.log[request.entries[i].index].term != request.entries[i].term:
                     self.log = {k:v for k,v in self.log.items() if k < request.entries[i].index}
-
-        
 
     def append_new_entries(self, request):
         for i in range(len(request.entries)):
@@ -233,24 +228,22 @@ class Node(pb2_grpc.NodeServicer):
         return pb2.GetLeaderResponse(nothing_id_vote=0, info_0=pb2.GetNothing())
 
     def SetVal(self, request, context):
-        # TODO: logging and saving
         print(f"Command from client: setval")
         if self.state == State.LEADER:
-            self.log[len(self.log)] = pb2.LogEntry(
-                term=self.term,
-                index=len(self.log), 
-                command=pb2.Command(name='SetVal', key=request.key, value=request.value))
-
             is_success = True
+            try:
+                self.log[len(self.log)] = pb2.LogEntry(
+                    term=self.term,
+                    index=len(self.log), 
+                    command=pb2.Command(name='SetVal', key=request.key, value=request.value))
+            except:
+                is_success = False
             return pb2.SetValResponse(success=is_success)
         elif self.state == State.CANDIDATE:
             return pb2.SetValResponse(success=False)
         elif self.state == State.FOLLOWER:
             if self.leaderId is not None:
-                print("Here")
                 leader_stub = self.list_of_stubs[self.leaderId][0]
-                print(leader_stub)
-                print(leader_stub.__dict__)
                 return leader_stub.SetVal(request)
             else:
                 return pb2.SetValResponse(success=False)
